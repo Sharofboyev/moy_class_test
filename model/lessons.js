@@ -12,7 +12,7 @@ router.get("/", (req, res) => {
         date: Joi.array().items(Joi.date().optional()).max(2).optional().allow(null),
         status: Joi.number().valid(0, 1).optional(),
         teacherIds: Joi.array().items(Joi.number().optional()).optional().allow(null),
-        studentsCount: Joi.array().items(Joi.number()).optional().allow(null),
+        studentsCount: Joi.array().items(Joi.number()).max(2).optional().allow(null),
         page: Joi.number().default(1),
         lessonsPerPage: Joi.number().default(5)
     }).validate(req.query);
