@@ -1,0 +1,29 @@
+{
+  "name": "moy_class_test",
+  "version": "1.0.0",
+  "description": "This is the test project from Sharofboyev Sarvar to testing coding skills in Node JS to the company Мой Класс",
+  "main": "index.js",
+  "dependencies": {
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "joi": "^17.4.0",
+    "moment": "^2.29.1",
+    "pg": "^8.6.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sharofboyev/moy_class_test.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sharofboyev/moy_class_test/issues"
+  },
+  "homepage": "https://github.com/Sharofboyev/moy_class_test#readme"
+}
