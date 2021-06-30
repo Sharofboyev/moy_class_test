@@ -18,14 +18,6 @@ router.get("/", (req, res) => {
     }).validate(req.query);
 
     if (error) return res.send({status: 400, message: "Bad request", error: error.details[0].message});
-    let teacher_arr = ""
-    if (value.teacherIds){
-        teacher_arr = "("
-        for (let i = 0; i < value.teacherIds.length; i++){
-            teacher_arr += value.teacherIds[i] + ","
-        }
-        teacher_arr = teacher_arr.substr(0, teacher_arr.length - 1) + ")"
-    }
     let offset = value.lessonsPerPage * (value.page - 1)
     let params = []
     let query = `
@@ -72,16 +64,15 @@ router.get("/", (req, res) => {
     if (value.studentsCount) {
         if (value.studentsCount.length == 1){
             params.push(value.studentsCount[0])
-            query += `studentsCount = $${params.length} AND `
+            query += `visitCount = $${params.length} AND `
         }
         else {
             params.push(value.studentsCount[0], value.studentsCount[1])
-            query += `studentsCount BETWEEN $${params.length - 1} AND $${params.length} AND `
+            query += `visitCount BETWEEN $${params.length - 1} AND $${params.length} AND `
         }
     }
-    if (value.status){
-        params.push(value.status)                       //filtering via status of lesson
-        query += `status = $${value.status}`
+    if (value.status != null && value.status != undefined){
+        query += `status = ${value.status}`                              //filtering via status of lesson
     }
     else {
         query += `status IN (0, 1) `
@@ -110,24 +101,57 @@ router.get("/", (req, res) => {
     })
 })
 
-router.post("/lessons", (req, res) => {
+router.post("/lessons", async (req, res) => {
     const {error, value} = Joi.object({
         teacherIds: Joi.array().items(Joi.number().integer().required()).min(1).required(),
         title: Joi.string().required(),
         days: Joi.array().items(Joi.number().integer().min(0).max(6)).max(7).min(1).required(),
         firstDate: Joi.date().required(),
         lessonsCount: Joi.number().integer().max(300).required(),
-        lastDate: Joi.date().optional()
+        lastDate: Joi.date().required()
     }).validate(req.body)
     if (error) {
         return res.send({status: 400, message: "Bad request", error: error.details[0].message})
     }
-    let firstDate = moment(value.firstDate), lastDate
-    if (value.lastDate) {
-        lastDate = moment(value.lastDate)
-    } else {
-        lastDate = moment(firstDate + 365 * 24 * 3600 * 1000)
+    const pool = new Pool(config.DB);
+    try {
+        for (let i = 0; i < value.teacherIds.length - 1; i++){
+            for (let k = i + 1; k < value.teacherIds.length; k++){
+                if (value.teacherIds[i] == value.teacherIds[k]){
+                    value.teacherIds.splice(k, 1)
+                }
+            }
+        }
+        let teachers = "("
+        for (let i = 0; i < value.teacherIds.length; i++){
+            teachers += `${value.teacherIds[i]}`
+            if (i != value.teacherIds.length - 1) teachers += ","
+            else teachers += ")"
+        }
+        let resp = await pool.query(`SELECT id FROM teachers WHERE id IN ${teachers}`)
+        if (resp.rowCount < value.teacherIds.length){
+            let not_found = []
+            for (let i = 0; i < value.teacherIds.length; i++){
+                let found = false
+                for (let k = 0; k < resp.rowCount; k++){
+                    if (value.teacherIds[i] == resp.rows[k].id){
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found){
+                    not_found.push(value.teacherIds[i])
+                }
+            }
+            return res.send({status: 400, message: "Bad request. There are teacher_ids that are not exist in teachers table", not_found: not_found})
+        }
     }
+    catch(err){
+        console.log(err.message);
+        return res.send({status: 500, message: "Internal server error"})
+    }
+    let firstDate = moment(value.firstDate)
+    let lastDate = moment(value.lastDate)
     let difference = lastDate.diff(firstDate, 'year')
     if (difference < 0){
         return res.send({status: 400, message: "Bad request", error: "Lastdate could not be less than firstDate"})
@@ -149,9 +173,8 @@ router.post("/lessons", (req, res) => {
         }
         iterationDay.add(1, "day")
     }
-    query_lessons = query_lessons.substr(0, query_lessons.length - 1) + " RETURNING id, to_char(date, 'YYYY-MM-DD') AS date"
+    query_lessons = query_lessons.substr(0, query_lessons.length - 1) + " RETURNING id"
     if (i > 1) {
-        const pool = new Pool(config.DB);
         pool.query(query_lessons, params, (err, resp) => {
             if (err){
                 console.log(err.message)
@@ -159,10 +182,11 @@ router.post("/lessons", (req, res) => {
             }
             let query_lesson_teachers = `INSERT INTO lesson_teachers (lesson_id, teacher_id) VALUES `
             params = []
-            for (let j = 0; j < value.teacherIds.length; j++){
+            let ids = []
+            for (let k = 0; k < resp.rowCount; k++){
+                for (let j = 0; j < value.teacherIds.length; j++){
                 params.push(value.teacherIds[j])
                 let id = params.length
-                for (let k = 0; k < resp.rowCount; k++){
                     query_lesson_teachers += `(${resp.rows[k].id}, $${id}),`
                 }
             }
